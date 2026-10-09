@@ -1,0 +1,44 @@
+name: Nightly planning tracker
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # 03:17 UTC every day
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Look back two years (first run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run tracker
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.COMPANIES_HOUSE_API_KEY }}
+          TRACKER_USER_AGENT: ${{ vars.TRACKER_USER_AGENT }}
+        run: |
+          if [ "${{ inputs.backfill }}" = "true" ]; then
+            python -m tracker.main --backfill
+          else
+            python -m tracker.main
+          fi
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "planning-tracker-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "Tracker run $(date -u +%F)"
+          git push

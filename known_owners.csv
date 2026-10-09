@@ -1,0 +1,34 @@
+pattern,parent
+\bvantage\b,Vantage Data Centers
+\bnext generation data\b|\bNGD\b,Vantage Data Centers
+\bcyrus ?one\b,CyrusOne
+\bnscale\b,Nscale
+\bdayone\b|\bday one data,DayOne
+\bequinix\b,Equinix
+\bdigital realty\b|\binterxion\b,Digital Realty
+\bark data cent,Ark Data Centres
+\bkao data\b,Kao Data
+\bvirtus\b,Virtus Data Centres
+\bglobal switch\b,Global Switch
+\bpure ?dc\b,Pure DC
+\byondr\b,Yondr
+\bNTT\b,NTT Global Data Centers
+\biron mountain\b,Iron Mountain
+\bQTS\b,QTS (Blackstone)
+\bstack infrastructure\b|\bstack emea\b,STACK Infrastructure
+\bcolt data cent|\bcolt dcs\b,Colt DCS
+\bedgeconnex\b,EdgeConneX
+\bechelon data\b,Echelon Data Centres
+\bcloudhq\b,CloudHQ
+\bsegro\b,SEGRO
+\bmicrosoft\b,Microsoft
+\bgoogle\b,Google
+\bamazon\b|\baws\b|\bamazon data services\b,Amazon (AWS)
+\bmeta platforms\b|\bfacebook\b,Meta
+\boracle\b,Oracle
+\bcoreweave\b,CoreWeave
+\bnebius\b,Nebius
+\bdigital edge\b,Digital Edge
+\bcentersquare\b,CenterSquare
+\bservecentric\b,ServeCentric
+\bkeppel data\b,Keppel DC
