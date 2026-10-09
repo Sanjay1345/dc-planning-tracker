@@ -103,7 +103,7 @@ def idox_details(f, summary_url):
 def idox_documents(f, summary_url):
     """Return [{date, type, description, url}] from the Documents tab."""
     url = re.sub(r"activeTab=\w+", "activeTab=documents", summary_url)
-    page = f.get(url)
+    page = f.get(url, cache=False)  # live load: sets the session cookie documents need
     base = "{0.scheme}://{0.netloc}".format(urllib.parse.urlparse(url))
     docs = []
     for row in re.findall(r"<tr[^>]*>(.*?)</tr>", page, re.S):
