@@ -15,13 +15,19 @@ from ..http import get_json
 
 API = "https://www.planit.org.uk/api/applics/json"
 PAGE_SIZE = 200  # PlanIt rejects responses over 1 MB; 500 records is ~1.3 MB
+# PlanIt withholds most names and puts a placeholder instead; treat as blank so
+# it is never sent to Companies House (which fuzzy-matches it to a real company).
+PLACEHOLDERS = {"see source", "n/a", "na", "none", "unknown", "not available", "-"}
 
 
 def _field(rec, key):
     """PlanIt puts some fields top-level and others under 'other_fields'."""
-    if rec.get(key) not in (None, ""):
-        return rec.get(key)
-    return (rec.get("other_fields") or {}).get(key)
+    val = rec.get(key)
+    if val in (None, ""):
+        val = (rec.get("other_fields") or {}).get(key)
+    if isinstance(val, str) and val.strip().lower() in PLACEHOLDERS:
+        return None
+    return val
 
 
 def normalise(rec):

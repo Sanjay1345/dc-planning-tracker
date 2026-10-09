@@ -45,6 +45,10 @@ Run locally instead: `pip install -r requirements.txt`, set the same environment
 - Owner confidence is "high" only when the Companies House name match is exact and the chain hits a known parent. Check "low" rows by hand.
 - Large UK schemes that opt into the national infrastructure route (possible since Jan 2026) go to the Planning Inspectorate, not councils. They are not covered yet.
 - Field names on the Irish service are discovered at run time; if they change, the run fails loudly with the available field list.
+- PlanIt withholds applicant names (it returns "See source"), and the Irish service leaves them blank. The Companies House step therefore rarely has a name to look up; owners mostly come from names in the description and from `data/known_owners.csv`.
+- PlanIt has no coordinates for most UK rows, and its status can lag the council (e.g. Cambois 24/04112/OUTES still shows "Undecided" although later records cite the approved outline).
+- Rows with `extract_hash` starting `manual` were classified by hand; nightly runs keep their stage, size, project and owner fields. `is_data_centre = possible` marks flexible-use schemes (e.g. "B2/B8 or data centre") and is left out of the change log.
+- `project` groups the many records (conditions, consultations from neighbouring councils, amendments) that belong to one scheme.
 
 ## Tests
 

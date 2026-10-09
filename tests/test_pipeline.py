@@ -109,6 +109,13 @@ def test_planit_normalise_and_paging(monkeypatch):
     assert r["agent"] == "Planning Co" and r["authority"] == "Buckinghamshire"
 
 
+def test_planit_placeholder_names_are_blank():
+    rec = {"name": "Slough/SMI/2026/31", "other_fields": {
+        "applicant_name": "See source", "agent_name": "See source"}}
+    r = planit.normalise(rec)
+    assert r["applicant"] == "" and r["agent"] == ""
+
+
 def test_ireland_field_discovery(monkeypatch):
     monkeypatch.setattr(ireland, "get_json", fake_ireland)
     rows = ireland.fetch(30)
@@ -181,3 +188,21 @@ def test_one_failing_source_does_not_stop_others(monkeypatch, tmp_data):
     monkeypatch.setattr(ireland, "get_json", boom)
     assert main.run(["uk", "ie"], 30, do_extract=False) == ["ie"]
     assert len(store.load_master()) == 2
+
+
+def test_merge_keeps_reviewed_fields():
+    old = {"id": "UK:x", "status": "Undecided", "stage": "approved", "mw_it": "90",
+           "extract_hash": "manual-review", "project": "P", "owner_parent": "Vantage"}
+    fresh = [{"id": "UK:x", "status": "Undecided", "stage": "", "mw_it": "", "owner_parent": ""}]
+    master, new_ids, changes = store.merge({"UK:x": dict(old)}, fresh, today="2026-10-10")
+    row = master["UK:x"]
+    assert row["stage"] == "approved" and row["mw_it"] == "90" and row["project"] == "P"
+    assert row["owner_parent"] == "Vantage"
+    assert new_ids == [] and changes == []  # a blank re-fetch is not a stage change
+
+
+def test_merge_manual_rows_beat_new_extraction():
+    old = {"id": "UK:x", "stage": "approved", "extract_hash": "manual-review"}
+    fresh = [{"id": "UK:x", "stage": "full application", "extract_hash": "abc"}]
+    master, _, changes = store.merge({"UK:x": dict(old)}, fresh, today="2026-10-10")
+    assert master["UK:x"]["stage"] == "approved" and changes == []

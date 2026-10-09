@@ -32,3 +32,6 @@ pattern,parent
 \bcentersquare\b,CenterSquare
 \bservecentric\b,ServeCentric
 \bkeppel data\b,Keppel DC
+\bdatavita\b,DataVita
+\bKLON-?\d,Kao Data
+\bMS (?:data centres|campus)\b|\bMicrosoft Campus\b,Microsoft

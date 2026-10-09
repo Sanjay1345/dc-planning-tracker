@@ -12,9 +12,18 @@ COLUMNS = [
     "floor_area_m2", "halls", "owner_parent", "owner_confidence", "owner_method",
     "applicant", "agent", "ch_company_number", "ownership_chain", "operator_mentioned",
     "description", "address", "lat", "lng", "url", "extract_notes", "source",
-    "first_seen", "last_seen", "extract_hash",
+    "first_seen", "last_seen", "extract_hash", "project",
 ]
 WATCHED = ["status", "decision", "stage", "decided_date"]
+# Filled by extraction, owner lookup or hand review rather than by the source.
+# Carried over from the master row when a fresh fetch leaves them blank, and
+# always kept for hand-reviewed rows (extract_hash "manual...").
+DERIVED = [
+    "is_data_centre", "category", "stage", "mw_it", "mw_grid", "floor_area_m2", "halls",
+    "operator_mentioned", "extract_notes", "extract_hash", "project",
+    "owner_parent", "owner_confidence", "owner_method", "ch_company_number", "ownership_chain",
+]
+OWNER_FIELDS = DERIVED[-5:]
 
 
 def load_master(path=None):
@@ -62,6 +71,12 @@ def merge(master, fresh, today=None):
             new_ids.append(row["id"])
         else:
             row["first_seen"] = old.get("first_seen") or today
+            manual = old.get("extract_hash", "").startswith("manual")
+            for f in DERIVED:
+                if manual and f not in OWNER_FIELDS and old.get(f):
+                    row[f] = old[f]
+                elif not row.get(f) and old.get(f):
+                    row[f] = old[f]
             diffs = [(f, old.get(f, ""), row.get(f, "")) for f in WATCHED if old.get(f, "") != row.get(f, "")]
             if diffs:
                 changes.append((row["id"], diffs))
