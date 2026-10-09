@@ -53,3 +53,26 @@ Run locally instead: `pip install -r requirements.txt`, set the same environment
 ## Tests
 
 `python -m pytest -q` runs offline with fixtures (no keys or network needed).
+
+## Ownership evidence (top projects)
+
+`tools/` builds an evidence chain for ownership from exact identifiers rather than name matching. It is run by hand, not nightly:
+
+1. `collect_evidence.py`: reads public council portal pages (Idox, Hillingdon Ocella, planning-register.co.uk) for applicant and agent, then downloads S106 agreements, deeds, cover letters, application forms and ownership certificates. `evidence.py` pulls company numbers, overseas-entity IDs, title numbers and agreement parties, each with a quote; it uses OCR only when a PDF has no text layer. The fetcher sends one request per host every 4 s and never retries after a refusal.
+2. `lr_index.py`: indexes HM Land Registry CCOD/OCOD (licensed; kept outside the repo). Title numbers quoted in documents are looked up exactly; site-address matches are recorded only when corroborated.
+3. `ch_chain.py`: Companies House PSC chain to the top entity, plus charges (lenders, title numbers in charge descriptions). Every step records why the chain stops.
+4. `assemble_ownership.py`: writes the columns below to `data/applications.csv`.
+
+| Column | Meaning |
+| --- | --- |
+| `company_number` | Main entity: a developer/interested party or owner named in a legal agreement, else the registered proprietor |
+| `ownership_chain` / `owner_parent` | Companies House PSC chain and its top entity |
+| `title_numbers` | Title numbers quoted in documents, or held by a corroborated proprietor; address-only ones marked "(low)" |
+| `landowner` | Registered proprietors (name, company number, confidence) |
+| `lender` | Mortgagees named in agreements, plus outstanding chargees from Companies House |
+| `evidence` | URL plus quoted text for each link |
+| `confidence` | `high`: an exact number or title quoted in the site's documents. `medium`: address-matched title whose proprietor's number also appears in the documents. `low`: name only, or address match with a data-centre proprietor name. Press reports and memory are never used. |
+
+Nightly runs never overwrite rows that carry `evidence`.
+
+Contains HM Land Registry data © Crown copyright and database right 2026. Contains Companies House data licensed under the Open Government Licence v3.0.

@@ -32,21 +32,38 @@ LEGAL = re.compile(r"(?i)106|heads of terms|unilateral|legal.agreement|deed|plan
 CONSULTANTS = re.compile(r"(?i)savills|tetra tech|quod|turley|lichfields|dp9|arup|\bwsp\b|aecom|stantec|\brps\b|"
                          r"pegasus|iceni|montagu evans|carter jonas|cbre|\bjll\b|knight frank|avison young|"
                          r"barton willmore|gerald eve|david lock|nexus|hgh|logan|union4|rapleys|newmark|freeths")
-ROLE = re.compile(r"[(\[]\s*[\"'“‘]?\s*the\s+([A-Z][A-Za-z ]{2,30}?)\s*[\"'”’]?\s*[)\]]")
+ROLE = re.compile(r"[(\[]\s*(?:together|each|jointly|both)?\s*(?:as\s+)?(?:the\s+)?[\"'\u201c\u2018]?\s*"
+                  r"(?:the\s+)?([A-Z][A-Za-z \-]{2,30}?)\s*[\"'\u201d\u2019]\s*[)\]]")
 LENDER = re.compile(r"(?i)mortgagee|chargee|lender|security (?:trustee|agent)")
 
 
+FOOTER = re.compile(r"(?i)is a (?:company|limited company) registered in|registered number\s*:|registered in england no|"
+                    r"a subsidiary of|vat (?:reg|no)")
+NOT_OWNER = re.compile(r"(?i)council|consultant|contractor|beneficiary|surety|guarantor|architect|engineer|"
+                       r"warrant|agent|county|authority|mortgagee|chargee|lender")
+DEVELOPER = re.compile(r"(?i)developer|interested party|applicant|promoter|tenant|leasehold owner|purchaser")
+
+
 def classify(item):
-    """Role of a company number in a document: agreement party (with defined role), consultant, or mention."""
+    """Role of a company number in a document: agreement party (with its defined role), lender, consultant, mention."""
     q, src = item["quote"], item.get("doc", "") + " " + item.get("doc_url", "")
     num = item["company_number"]
-    around = q[max(0, q.find(num.lstrip("0")[:5]) - 200):] if num.lstrip("0")[:5] in q else q
-    if CONSULTANTS.search(around[:250]) and not LENDER.search(around):
-        return "consultant letterhead", ""
-    if LEGAL.search(src) and (item["kind"] == "parties" or re.search(r"(?i)registered office|incorporated", around)):
-        m = ROLE.search(around)
+    key = num.lstrip("0")[:6]
+    pos = q.find(key) if key and key in q else -1
+    before = q[max(0, pos - 220):pos] if pos >= 0 else q
+    after = q[pos:pos + 260] if pos >= 0 else q
+    if FOOTER.search(before[-160:] + after[:80]) or (CONSULTANTS.search(before[-120:]) and not LENDER.search(after)):
+        return "consultant/footer", ""
+    m = ROLE.search(after)
+    if LEGAL.search(src) and m and LENDER.search(m.group(1)):
+        return "lender", m.group(1).strip()
+    if LEGAL.search(src) and (item["kind"] == "parties" or re.search(r"(?i)registered office|incorporated", after)
+                              or re.search(r"(?i)incorporated in|registered in", before[-120:])):
+        m = ROLE.search(after)
         role = m.group(1).strip() if m else ""
-        return ("lender" if LENDER.search(role or around[:400]) else "agreement party"), role
+        if LENDER.search(role):
+            return "lender", role
+        return "agreement party", role
     return "document mention", ""
 
 
@@ -81,7 +98,7 @@ def main(scratch, lr_db):
             det = rec.get("details") or {}
             for k, v in det.items():
                 v = re.sub(r"(?i)^c/o\s+", "", v)
-                if re.search(r"applicant", k, re.I) and v and ORG.search(v) and not re.match(r"(?i)not available|see source|fao", v):
+                if re.search(r"applicant", k, re.I) and v and ORG.search(v) and not re.search(r"(?i)council|not available|see source|^fao", v):
                     applicants.add(v)
                     ev.append(f"{rec.get('details_url', rec.get('portal_url'))} | {k}: \"{v}\"")
                 if re.search(r"agent", k, re.I) and "address" not in k.lower() and v and v != "Not Available":
@@ -99,7 +116,7 @@ def main(scratch, lr_db):
                 elif it["kind"] in ("parties", "companies"):
                     num = it["company_number"]
                     role, defined = classify(it)
-                    rank = {"agreement party": 3, "lender": 3, "document mention": 1, "consultant letterhead": 0}
+                    rank = {"agreement party": 3, "lender": 3, "document mention": 1, "consultant/footer": 0}
                     if num not in companies or rank[role] > rank[companies[num]["role"]] or (
                             it.get("name") and not companies[num].get("name")):
                         companies[num] = {"role": role, "defined_as": defined or companies.get(num, {}).get("defined_as", ""),
@@ -188,20 +205,31 @@ def write_csv(scratch):
         # candidates: (confidence, company number, name, basis text, evidence lines, titles)
         cands = []
         for num, c in p["companies"].items():
-            if c["role"] == "agreement party":
-                cands.append(("high", num, c.get("name", ""), f"named as {c.get('defined_as') or 'party'} in legal agreement",
-                              [c["evidence"]], []))
+            role = c.get("defined_as") or ""
+            q = c["evidence"].split(" | ", 1)[-1]
+            if c["role"] != "agreement party" or NOT_OWNER.search(role) or (
+                    not role and re.search(r"(?i)warrant|contractor|consultant|beneficiary", q)):
+                continue
+            ch_ok = chains.get(num, {}).get("chain", [{}])[0].get("stop") != "not found at Companies House"
+            if not ch_ok and num.isdigit():
+                continue  # e.g. a Jersey registration number; its OE ID is listed separately
+            cands.append(("high", num, c.get("name", ""), f"named as {role or 'party'} in legal agreement",
+                          [c["evidence"]], [], 2 if DEVELOPER.search(role) else 1 if "owner" in role.lower() else 0))
         for key, lo in p["landowners"].items():
             pname, pnum = key.split("|")
             cands.append((lo["basis"], pnum, pname, "registered proprietor (HM Land Registry)", lo["evidence"][:4],
-                          lo["titles"]))
-        lenders_doc = [f"{c.get('name') or num} ({num})" for num, c in p["companies"].items() if c["role"] == "lender"]
+                          lo["titles"], 1))
+        lenders_doc = [f"{c.get('name') or (chains.get(num, {}).get('chain') or [{}])[0].get('name') or '?'} ({num}, "
+                       f"{c.get('defined_as') or 'lender'} in legal agreement)"
+                       for num, c in p["companies"].items() if c["role"] == "lender"]
         apps = p["applicants"]
-        best = sorted(cands, key=lambda c: (RANK[c[0]], bool(chains.get(c[1]))), reverse=True)
+        best = sorted(cands, key=lambda c: (RANK[c[0]], c[6], bool(chains.get(c[1]))), reverse=True)
         row_vals = {}
         if best:
-            conf, num, name, basis, ev, _ = best[0]
+            conf, num, name, basis, ev, _, _ = best[0]
             cs = chain_summary(num, chains) if num else None
+            if not name and num in chains:
+                name = chains[num]["chain"][0].get("name") or ""
             titles = sorted({t for c in cands if RANK[c[0]] >= 2 for t in c[5]} | set(p["titles"]))
             low_titles = sorted({t for c in cands if c[0] == "low" for t in c[5]} - set(titles))
             landowners = sorted({f"{c[2]} ({c[1] or 'no number'}) [{c[0]}]" for c in cands if "proprietor" in c[3]})
