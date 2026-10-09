@@ -11,12 +11,13 @@ import tempfile
 from pathlib import Path
 
 # UK company numbers: 8 digits, or a 2-letter prefix + 6 digits (SC, NI, OC, SO, NC, FC, ...)
-CO_NUM = r"((?:SC|NI|OC|SO|NC|FC|NF|GE|LP|SL|SE|R0|IP|SP|RC|ZC)?\d{6,8})"
+CO_NUM = r"((?:OE|SC|NI|OC|SO|NC|FC|NF|GE|LP|SL|SE|R0|IP|SP|RC|ZC)?\d{6,8})"
 COMPANY_PATTERNS = [
     re.compile(r"(?:company|registration|registered|reg\.?)\s*(?:no\.?|number|num\.?)\s*[:.]?\s*" + CO_NUM, re.I),
     re.compile(r"registered in (?:England|Scotland|Wales|England and Wales|England & Wales|Northern Ireland)"
                r"[^.\n]{0,40}?(?:no\.?|number)\s*[:.]?\s*" + CO_NUM, re.I),
     re.compile(r"\(\s*(?:company|registered)\s*(?:no\.?|number)\s*" + CO_NUM + r"\s*\)", re.I),
+    re.compile(r"\bOE\s*ID\s*[:.]?\s*(OE\d{6})", re.I),
 ]
 # Title numbers: 1-3 letters + 1-7 digits (e.g. ND116185, AGL123456, MX12345), found near "title".
 TITLE_TOKEN = r"\b([A-Z]{1,3}\d{2,7})\b"
@@ -40,11 +41,16 @@ def pdf_text(path, ocr_pages=15):
     if not ocr_pages:
         return out, "no text layer"
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(["pdftoppm", "-r", "200", "-gray", "-f", "1", "-l", str(ocr_pages), str(path), f"{tmp}/p"],
+        subprocess.run(["pdftoppm", "-r", "200", "-scale-to", "1800", "-gray", "-f", "1", "-l", str(ocr_pages),
+                        str(path), f"{tmp}/p"],
                        capture_output=True)
         txt = []
         for img in sorted(Path(tmp).glob("p-*")):
-            txt.append(subprocess.run(["tesseract", str(img), "-"], capture_output=True, text=True).stdout)
+            try:
+                txt.append(subprocess.run(["tesseract", str(img), "-"], capture_output=True, text=True, timeout=180,
+                                          env={"OMP_THREAD_LIMIT": "1", "PATH": "/usr/bin:/bin"}).stdout)
+            except subprocess.TimeoutExpired:
+                txt.append("")
     return "\n".join(txt), f"OCR pages 1-{min(pages, ocr_pages)}"
 
 
@@ -54,7 +60,7 @@ def _quote(text, start, end, pad=160):
 
 def _valid_company(num):
     digits = re.sub(r"\D", "", num)
-    return len(num) == 8 and digits and int(digits) > 0
+    return len(num) == 8 and digits and int(digits) > 0 and (num[:2].isalpha() or num.isdigit())
 
 
 def extract(text):

@@ -147,7 +147,7 @@ def test_owner_chain_via_companies_house(monkeypatch, tmp_data):
     owners.resolve([row], owners.load_known(), {})
     assert row["owner_parent"] == "Vantage Data Centers"
     assert row["ownership_chain"].endswith("Vantage Data Centers EMEA S.a r.l.")
-    assert row["owner_confidence"] == "high"
+    assert row["confidence"] == "high"
 
 
 def test_known_name_in_ireland():
@@ -206,3 +206,22 @@ def test_merge_manual_rows_beat_new_extraction():
     fresh = [{"id": "UK:x", "stage": "full application", "extract_hash": "abc"}]
     master, _, changes = store.merge({"UK:x": dict(old)}, fresh, today="2026-10-10")
     assert master["UK:x"]["stage"] == "approved" and changes == []
+
+
+def test_merge_keeps_evidenced_ownership():
+    old = {"id": "UK:x", "owner_parent": "Colt", "confidence": "high", "evidence": "url | quote",
+           "company_number": "15330854", "title_numbers": "AGL3721"}
+    fresh = [{"id": "UK:x", "owner_parent": "Vantage Data Centers", "confidence": "low (known name)"}]
+    master, _, _ = store.merge({"UK:x": dict(old)}, fresh, today="2026-10-10")
+    row = master["UK:x"]
+    assert row["owner_parent"] == "Colt" and row["company_number"] == "15330854" and row["evidence"]
+
+
+def test_load_master_renames_old_columns(tmp_data):
+    import csv as _csv
+    with open(config.MASTER_CSV, "w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=["id", "owner_confidence", "ch_company_number"])
+        w.writeheader()
+        w.writerow({"id": "UK:x", "owner_confidence": "high", "ch_company_number": "123"})
+    row = store.load_master()["UK:x"]
+    assert row["confidence"] == "high" and row["company_number"] == "123"

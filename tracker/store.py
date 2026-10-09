@@ -9,11 +9,13 @@ from . import config
 COLUMNS = [
     "id", "country", "authority", "reference", "received_date", "decided_date",
     "status", "decision", "stage", "is_data_centre", "category", "mw_it", "mw_grid",
-    "floor_area_m2", "halls", "owner_parent", "owner_confidence", "owner_method",
-    "applicant", "agent", "ch_company_number", "ownership_chain", "operator_mentioned",
+    "floor_area_m2", "halls", "owner_parent", "confidence", "owner_method",
+    "applicant", "agent", "company_number", "ownership_chain", "title_numbers", "landowner", "lender",
+    "operator_mentioned",
     "description", "address", "lat", "lng", "url", "extract_notes", "source",
-    "first_seen", "last_seen", "extract_hash", "project",
+    "first_seen", "last_seen", "extract_hash", "project", "evidence",
 ]
+RENAMED = {"owner_confidence": "confidence", "ch_company_number": "company_number"}
 WATCHED = ["status", "decision", "stage", "decided_date"]
 # Filled by extraction, owner lookup or hand review rather than by the source.
 # Carried over from the master row when a fresh fetch leaves them blank, and
@@ -21,9 +23,10 @@ WATCHED = ["status", "decision", "stage", "decided_date"]
 DERIVED = [
     "is_data_centre", "category", "stage", "mw_it", "mw_grid", "floor_area_m2", "halls",
     "operator_mentioned", "extract_notes", "extract_hash", "project",
-    "owner_parent", "owner_confidence", "owner_method", "ch_company_number", "ownership_chain",
+    "owner_parent", "confidence", "owner_method", "company_number", "ownership_chain",
+    "title_numbers", "landowner", "lender", "evidence",
 ]
-OWNER_FIELDS = DERIVED[-5:]
+OWNER_FIELDS = DERIVED[-9:]
 
 
 def load_master(path=None):
@@ -31,7 +34,8 @@ def load_master(path=None):
     if not path.exists():
         return {}
     with open(path, newline="", encoding="utf-8") as fh:
-        return {r["id"]: r for r in csv.DictReader(fh)}
+        rows = [{RENAMED.get(k, k): v for k, v in r.items()} for r in csv.DictReader(fh)]
+    return {r["id"]: r for r in rows}
 
 
 def save_master(rows, path=None):
@@ -72,9 +76,12 @@ def merge(master, fresh, today=None):
         else:
             row["first_seen"] = old.get("first_seen") or today
             manual = old.get("extract_hash", "").startswith("manual")
+            evidenced = bool(old.get("evidence"))  # ownership built from documents/registers
             for f in DERIVED:
                 if manual and f not in OWNER_FIELDS and old.get(f):
                     row[f] = old[f]
+                elif evidenced and f in OWNER_FIELDS:
+                    row[f] = old.get(f, "")
                 elif not row.get(f) and old.get(f):
                     row[f] = old[f]
             diffs = [(f, old.get(f, ""), row.get(f, "")) for f in WATCHED if old.get(f, "") != row.get(f, "")]
@@ -91,7 +98,7 @@ def _line(r):
         f"**{r.get('authority')}** ({r.get('country')})",
         f"{mw} MW" if mw else None,
         r.get("category") or None,
-        f"owner: {r.get('owner_parent')} [{r.get('owner_confidence')}]" if r.get("owner_parent") else
+        f"owner: {r.get('owner_parent')} [{r.get('confidence')}]" if r.get("owner_parent") else
         (f"applicant: {r.get('applicant')}" if r.get("applicant") else None),
         f"stage: {r.get('stage') or r.get('status')}",
     ]

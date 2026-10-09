@@ -96,7 +96,7 @@ def resolve(rows, known, cache):
         texts = [row.get("applicant"), row.get("agent"), row.get("description"), row.get("operator_mentioned")]
         parent = match_known(texts, known)
         row.update(owner_parent=parent or "", owner_method="known name" if parent else "",
-                   owner_confidence="high" if parent else "", ch_company_number="", ownership_chain="")
+                   confidence="low (known name)" if parent else "", company_number="", ownership_chain="")
 
         applicant = row.get("applicant") or ""
         if row["country"] != "UK" or not applicant or not config.COMPANIES_HOUSE_API_KEY:
@@ -111,12 +111,12 @@ def resolve(rows, known, cache):
         if not hit:
             continue
         chain = hit["chain"]
-        row["ch_company_number"] = hit["number"]
+        row["company_number"] = hit["number"]
         row["ownership_chain"] = " > ".join(chain)
         if not parent:
             chain_parent = match_known(chain, known)
             row["owner_parent"] = chain_parent or chain[-1]
             row["owner_method"] = "Companies House chain" + (" + known name" if chain_parent else "")
-            row["owner_confidence"] = "high" if hit["exact"] and chain_parent else (
+            row["confidence"] = "high" if hit["exact"] and chain_parent else (
                 "medium" if hit["exact"] else "low (name match not exact)")
     return rows

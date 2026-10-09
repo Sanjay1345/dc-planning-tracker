@@ -28,6 +28,13 @@ SKIP = re.compile(r"objection|representation|comment|consultee|neighbour|public|
 MAIN_STAGES = {"approved", "outline application", "full application", "reserved matters", "amendment/variation",
                "approved subject to legal agreement", "appeal", "refused", "withdrawn",
                "lawful use / LDO certificate"}
+def doc_filename(url):
+    """Unique, readable cache name for a document URL (some portals reuse short IDs)."""
+    import hashlib
+    tail = re.sub(r"[^\w.-]", "_", urllib.parse.unquote(url.split("#")[0].split("/")[-1]))[-80:]
+    return hashlib.sha1(url.encode()).hexdigest()[:12] + "_" + tail
+
+
 IDOX_PATH = "/online-applications/applicationDetails.do"
 
 
@@ -49,7 +56,8 @@ def pick_docs(docs):
     legal = [d for d in docs if LEGAL.search(d["type"] + " " + d["description"])][:4]
     useful = [d for d in docs if d not in legal and USEFUL.search(d["type"] + " " + d["description"])
               and not SKIP.search(d["type"])][:5]
-    return [(d, 15) for d in legal] + [(d, 3) for d in useful]
+    form = re.compile(r"application form|cover|letter|certificate", re.I)
+    return [(d, 8) for d in legal] + [(d, 2 if form.search(d["type"] + " " + d["description"]) else 0) for d in useful]
 
 
 def run(top_path, urls_path, out_path, cache, only=None):
@@ -83,7 +91,7 @@ def run(top_path, urls_path, out_path, cache, only=None):
                 rec["documents_url"], rec["n_documents"] = docs_url, len(docs)
                 rec["legal_docs_listed"] = [d for d in docs if LEGAL.search(d["type"] + " " + d["description"])]
                 for d, ocr_pages in pick_docs(docs):
-                    path = pdf_dir / (re.sub(r"[^\w.-]", "_", urllib.parse.unquote(d["url"].split("/")[-1]))[-120:])
+                    path = pdf_dir / (doc_filename(d["url"]))
                     if not path.exists():
                         data = portal.download(f, d, docs_url)
                         if not data.startswith(b"%PDF"):
