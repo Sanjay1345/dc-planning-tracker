@@ -14,7 +14,7 @@ from .. import config
 from ..http import get_json
 
 API = "https://www.planit.org.uk/api/applics/json"
-PAGE_SIZE = 500
+PAGE_SIZE = 200  # PlanIt rejects responses over 1 MB; 500 records is ~1.3 MB
 
 
 def _field(rec, key):
@@ -50,7 +50,7 @@ def fetch(since_days):
     start = (date.today() - timedelta(days=since_days)).isoformat()
     out = {}
     for phrase in config.SEARCH_PHRASES:
-        page = 0
+        page = 1  # PlanIt pages are 1-based; page=0 is a 400
         while True:
             data = get_json(
                 API,
@@ -67,7 +67,7 @@ def fetch(since_days):
                 row = normalise(rec)
                 out[row["id"]] = row
             total = (data or {}).get("total") or 0
-            if not records or (page + 1) * PAGE_SIZE >= total:
+            if not records or page * PAGE_SIZE >= total:
                 break
             page += 1
     return list(out.values())

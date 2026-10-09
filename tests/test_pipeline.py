@@ -61,6 +61,7 @@ def tmp_data(tmp_path, monkeypatch):
 
 
 def fake_planit(url, params=None, auth=None):
+    assert params["page"] >= 1, "PlanIt rejects page < 1"
     return PLANIT_PAGE
 
 
